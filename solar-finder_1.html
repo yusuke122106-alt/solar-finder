@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Finder — ソーラーパネル検出ツール</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0a0f1a;
+    --surface: #111827;
+    --surface2: #1a2333;
+    --border: #1e3a5f;
+    --accent: #f59e0b;
+    --accent2: #3b82f6;
+    --success: #10b981;
+    --danger: #ef4444;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #64748b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .logo { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
+  .logo-icon { width: 30px; height: 30px; background: linear-gradient(135deg, var(--accent), #f97316); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+
+  .search-bar { display: flex; gap: 6px; flex: 1; min-width: 200px; max-width: 420px; }
+  .search-bar input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-size: 13px; font-family: 'Inter', sans-serif; outline: none; transition: border-color 0.2s; }
+  .search-bar input:focus { border-color: var(--accent2); }
+  .search-bar input::placeholder { color: var(--text3); }
+
+  .btn { padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; font-family: 'Inter', sans-serif; transition: all 0.2s; white-space: nowrap; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #fbbf24; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+
+  .mode-toggle { display: flex; gap: 3px; background: var(--surface2); padding: 3px; border-radius: 8px; border: 1px solid var(--border); }
+  .mode-btn { padding: 5px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text2); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; }
+  .mode-btn.active { background: var(--accent); color: #000; }
+
+  .header-stats { display: flex; gap: 14px; margin-left: auto; font-size: 12px; }
+  .stat { display: flex; align-items: center; gap: 5px; color: var(--text2); }
+  .stat-value { font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .stat-value.green { color: var(--success); }
+  .stat-value.yellow { color: var(--accent); }
+  .stat-value.red { color: var(--danger); }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+  #map { flex: 1; position: relative; }
+
+  .scan-progress { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--border); z-index: 20; display: none; }
+  .scan-progress.show { display: block; }
+  .scan-progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.3s; width: 0%; }
+
+  .sidebar { width: 300px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-title { font-size: 13px; font-weight: 600; }
+  .badge { background: var(--accent); color: #000; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; }
+
+  .sidebar-actions { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+
+  .filter-tabs { display: flex; padding: 8px 12px; gap: 4px; border-bottom: 1px solid var(--border); }
+  .filter-tab { flex: 1; padding: 5px 4px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; text-align: center; }
+  .filter-tab.active { background: var(--surface2); color: var(--text); border-color: var(--accent2); }
+  .filter-tab.solar-tab.active { border-color: var(--success); color: var(--success); }
+  .filter-tab.nosolar-tab.active { border-color: var(--danger); color: var(--danger); }
+
+  .flags-list { flex: 1; overflow-y: auto; padding: 6px; }
+  .flags-list::-webkit-scrollbar { width: 4px; }
+  .flags-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .flag-item { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 8px; padding: 10px 10px 10px 12px; margin-bottom: 6px; cursor: pointer; transition: all 0.2s; position: relative; }
+  .flag-item:hover { border-color: var(--accent2); transform: translateX(-2px); }
+  .flag-item.has-solar { border-left-color: var(--success); }
+  .flag-item.no-solar { border-left-color: var(--danger); }
+  .flag-item.loading { border-left-color: var(--accent); }
+
+  .flag-id { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+  .flag-address { font-size: 11px; color: var(--text2); line-height: 1.4; margin-bottom: 5px; }
+  .flag-status { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .status-dot.solar { background: var(--success); }
+  .status-dot.no-solar { background: var(--danger); }
+  .status-dot.unknown { background: var(--text3); }
+  .status-dot.loading { background: var(--accent); animation: pulse 1s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .flag-delete { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; background: transparent; border: none; color: var(--text3); cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s; }
+  .flag-delete:hover { background: var(--danger); color: white; }
+
+  .solar-score { font-size: 10px; color: var(--text3); margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+
+  .empty-state { text-align: center; padding: 30px 16px; color: var(--text3); }
+  .empty-state-icon { font-size: 28px; margin-bottom: 10px; }
+  .empty-state-text { font-size: 12px; line-height: 1.8; }
+
+  .export-section { padding: 10px 12px; border-top: 1px solid var(--border); }
+  .export-btn { width: 100%; padding: 9px; background: linear-gradient(135deg, var(--accent2), #6366f1); border: none; border-radius: 8px; color: white; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .export-btn:hover { opacity: 0.9; }
+
+  .scan-overlay { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(10,15,26,0.95); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; text-align: center; z-index: 15; display: none; min-width: 240px; }
+  .scan-overlay.show { display: block; }
+  .scan-overlay-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .scan-overlay-sub { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+  .mini-progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+  .mini-progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.3s; }
+  .cancel-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: 'Inter', sans-serif; }
+  .cancel-btn:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+  .draw-hint { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; font-size: 12px; font-weight: 700; padding: 8px 16px; border-radius: 20px; z-index: 10; display: none; pointer-events: none; }
+  .draw-hint.show { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">☀️</div>
+    Solar Finder
+  </div>
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="例: 栃木県宇都宮市、埼玉県熊谷市..." />
+    <button class="btn btn-primary" onclick="searchAddress()">検索</button>
+  </div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="modeClick" onclick="setMode('click')">📍 個別クリック</button>
+    <button class="mode-btn" id="modeArea" onclick="setMode('area')">🔲 エリア自動</button>
+  </div>
+  <div class="header-stats">
+    <div class="stat"><span>合計</span><span class="stat-value yellow" id="totalCount">0</span></div>
+    <div class="stat"><span>🟢</span><span class="stat-value green" id="solarCount">0</span></div>
+    <div class="stat"><span>🔴</span><span class="stat-value red" id="noSolarCount">0</span></div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map">
+    <div class="scan-progress" id="scanProgress"><div class="scan-progress-bar" id="scanProgressBar"></div></div>
+    <div class="draw-hint" id="drawHint">🔲 ドラッグして調査エリアを囲んでください</div>
+    <div class="scan-overlay" id="scanOverlay">
+      <div class="scan-overlay-title">🔍 エリアをスキャン中...</div>
+      <div class="scan-overlay-sub" id="scanStatus">準備中...</div>
+      <div class="mini-progress"><div class="mini-progress-bar" id="miniProgressBar" style="width:0%"></div></div>
+      <button class="cancel-btn" onclick="cancelScan()">キャンセル</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">📋 検出結果</span>
+      <span class="badge" id="flagBadge">0</span>
+    </div>
+    <div class="sidebar-actions">
+      <button class="btn btn-secondary" style="flex:1;font-size:11px" onclick="clearAll()">🗑️ 全削除</button>
+      <button class="btn btn-secondary" style="flex:1;font-size:11px" onclick="newArea()">➕ 新エリア</button>
+    </div>
+    <div class="filter-tabs">
+      <button class="filter-tab active" onclick="setFilter('all')">全て</button>
+      <button class="filter-tab solar-tab" onclick="setFilter('solar')">🟢 あり</button>
+      <button class="filter-tab nosolar-tab" onclick="setFilter('nosolar')">🔴 なし</button>
+    </div>
+    <div class="flags-list" id="flagsList">
+      <div class="empty-state">
+        <div class="empty-state-icon">🗺️</div>
+        <div class="empty-state-text">
+          <strong style="color:var(--text)">使い方:</strong><br>
+          1. 住所を検索<br>
+          2. 「エリア自動」に切替<br>
+          3. 地図をドラッグで囲む<br>
+          4. 自動スキャン開始！
+        </div>
+      </div>
+    </div>
+    <div class="export-section">
+      <button class="export-btn" onclick="exportCSV()">📥 CSVエクスポート（Excel用）</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_KEY = 'AIzaSyBcATWao1nEV93-vh2R8QiUjVpfo9NVegg';
+let map, geocoder;
+let markers = [], flags = [];
+let currentAreaId = 1, flagItemCounter = {};
+let currentMode = 'click', currentFilter2 = 'all';
+let isCancelled = false;
+let isDrawing = false, drawRect = null, drawStart = null;
+let mmListener = null, muListener = null, mdListener = null;
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 36.5657, lng: 139.8836 },
+    zoom: 15,
+    mapTypeId: 'hybrid',
+    streetViewControl: false,
+    fullscreenControl: false,
+  });
+  geocoder = new google.maps.Geocoder();
+  map.addListener('click', (e) => { if (currentMode === 'click') addFlag(e.latLng.lat(), e.latLng.lng()); });
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeClick').classList.toggle('active', mode === 'click');
+  document.getElementById('modeArea').classList.toggle('active', mode === 'area');
+  document.getElementById('drawHint').classList.toggle('show', mode === 'area');
+  if (mdListener) { google.maps.event.removeListener(mdListener); mdListener = null; }
+  if (mode === 'area') { mdListener = map.addListener('mousedown', onDrawStart); }
+  map.setOptions({ draggable: true });
+}
+
+function onDrawStart(e) {
+  if (currentMode !== 'area') return;
+  isDrawing = true;
+  drawStart = e.latLng;
+  map.setOptions({ draggable: false });
+  if (drawRect) drawRect.setMap(null);
+  drawRect = new google.maps.Rectangle({
+    bounds: new google.maps.LatLngBounds(drawStart, drawStart),
+    fillColor: '#f59e0b', fillOpacity: 0.15,
+    strokeColor: '#f59e0b', strokeWeight: 2, map,
+  });
+  mmListener = map.addListener('mousemove', (e2) => {
+    if (!isDrawing) return;
+    drawRect.setBounds(new google.maps.LatLngBounds(
+      new google.maps.LatLng(Math.min(drawStart.lat(), e2.latLng.lat()), Math.min(drawStart.lng(), e2.latLng.lng())),
+      new google.maps.LatLng(Math.max(drawStart.lat(), e2.latLng.lat()), Math.max(drawStart.lng(), e2.latLng.lng()))
+    ));
+  });
+  muListener = map.addListener('mouseup', (e2) => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    google.maps.event.removeListener(mmListener);
+    google.maps.event.removeListener(muListener);
+    map.setOptions({ draggable: true });
+    const bounds = drawRect.getBounds();
+    const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
+    if (Math.abs(ne.lat()-sw.lat()) < 0.0005 || Math.abs(ne.lng()-sw.lng()) < 0.0005) {
+      if (drawRect) { drawRect.setMap(null); drawRect = null; } return;
+    }
+    startAreaScan(bounds);
+  });
+}
+
+async function startAreaScan(bounds) {
+  isCancelled = false;
+  document.getElementById('drawHint').classList.remove('show');
+  const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
+  const latDiff = ne.lat()-sw.lat(), lngDiff = ne.lng()-sw.lng();
+  const steps = Math.min(Math.max(Math.round(Math.max(latDiff,lngDiff)/0.0003), 4), 12);
+  const points = [];
+  for (let i=0; i<=steps; i++)
+    for (let j=0; j<=steps; j++)
+      points.push({ lat: sw.lat()+(latDiff/steps)*i, lng: sw.lng()+(lngDiff/steps)*j });
+
+  const total = points.length;
+  let done = 0;
+  document.getElementById('scanOverlay').classList.add('show');
+  document.getElementById('scanProgress').classList.add('show');
+
+  for (const pt of points) {
+    if (isCancelled) break;
+    document.getElementById('scanStatus').textContent = `${done+1} / ${total} ポイント検索中`;
+    const pct = Math.round((done/total)*100);
+    document.getElementById('miniProgressBar').style.width = pct+'%';
+    document.getElementById('scanProgressBar').style.width = pct+'%';
+    await addFlag(pt.lat, pt.lng, true);
+    done++;
+    await sleep(150);
+  }
+
+  document.getElementById('scanOverlay').classList.remove('show');
+  document.getElementById('scanProgress').classList.remove('show');
+  document.getElementById('scanProgressBar').style.width = '0%';
+  if (drawRect) { drawRect.setMap(null); drawRect = null; }
+  document.getElementById('drawHint').classList.add('show');
+}
+
+function cancelScan() {
+  isCancelled = true;
+  document.getElementById('scanOverlay').classList.remove('show');
+  document.getElementById('scanProgress').classList.remove('show');
+  if (drawRect) { drawRect.setMap(null); drawRect = null; }
+  document.getElementById('drawHint').classList.add('show');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function isTooClose(lat, lng) {
+  return flags.some(f => Math.abs(f.lat-lat) < 0.0001 && Math.abs(f.lng-lng) < 0.0001);
+}
+
+async function addFlag(lat, lng, silent=false) {
+  if (isTooClose(lat, lng)) return;
+  let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  try {
+    address = await new Promise((res,rej) => {
+      geocoder.geocode({location:{lat,lng}}, (r,s) => s==='OK'&&r[0] ? res(r[0].formatted_address) : rej());
+    });
+  } catch {}
+
+  const areaId = currentAreaId;
+  if (!flagItemCounter[areaId]) flagItemCounter[areaId] = 0;
+  flagItemCounter[areaId]++;
+  const flagId = `${areaId}-${flagItemCounter[areaId]}`;
+  const flag = { id: flagId, lat, lng, address, status: 'loading', panelCount: null, roofArea: null };
+  flags.push(flag);
+  renderFlags();
+  addMarker(flag);
+
+  try {
+    const resp = await fetch(`https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=LOW&key=${API_KEY}`);
+    const data = await resp.json();
+    if (data.error?.code === 404) {
+      flags = flags.filter(f => f.id !== flag.id);
+      const mi = markers.findIndex(m => m.id === flag.id);
+      if (mi !== -1) { markers[mi].marker.setMap(null); markers.splice(mi,1); }
+      renderFlags(); updateStats(); return;
+    }
+    if (!data.error && data.solarPotential?.maxArrayPanelsCount > 0) {
+      flag.status = 'solar';
+      flag.panelCount = data.solarPotential.maxArrayPanelsCount;
+      flag.roofArea = data.solarPotential.wholeRoofStats?.areaMeters2?.toFixed(0);
+    } else { flag.status = 'no-solar'; }
+  } catch { flag.status = 'unknown'; }
+
+  renderFlags(); updateMarker(flag); updateStats();
+}
+
+function addMarker(flag) {
+  const marker = new google.maps.Marker({
+    position:{lat:flag.lat,lng:flag.lng}, map,
+    label:{text:flag.id,color:'#fff',fontSize:'10px',fontWeight:'bold'},
+    icon:{path:google.maps.SymbolPath.CIRCLE,scale:13,fillColor:'#f59e0b',fillOpacity:1,strokeColor:'#fff',strokeWeight:2},
+    title:flag.address,
+  });
+  marker.addListener('click', () => document.querySelector(`[data-id="${flag.id}"]`)?.scrollIntoView({behavior:'smooth',block:'nearest'}));
+  markers.push({id:flag.id, marker});
+}
+
+function updateMarker(flag) {
+  const m = markers.find(m=>m.id===flag.id);
+  if (!m) return;
+  const colors={solar:'#10b981','no-solar':'#ef4444',unknown:'#64748b',loading:'#f59e0b'};
+  m.marker.setIcon({path:google.maps.SymbolPath.CIRCLE,scale:13,fillColor:colors[flag.status]||'#f59e0b',fillOpacity:1,strokeColor:'#fff',strokeWeight:2});
+}
+
+function setFilter(f) {
+  currentFilter2 = f;
+  document.querySelectorAll('.filter-tab').forEach((el,i)=>el.classList.toggle('active',['all','solar','nosolar'][i]===f));
+  renderFlags();
+}
+
+function renderFlags() {
+  const list = document.getElementById('flagsList');
+  document.getElementById('flagBadge').textContent = flags.length;
+  let filtered = flags;
+  if (currentFilter2==='solar') filtered=flags.filter(f=>f.status==='solar');
+  if (currentFilter2==='nosolar') filtered=flags.filter(f=>f.status==='no-solar');
+
+  if (flags.length===0) {
+    list.innerHTML=`<div class="empty-state"><div class="empty-state-icon">🗺️</div><div class="empty-state-text"><strong style="color:var(--text)">使い方:</strong><br>1. 住所を検索<br>2. 「エリア自動」に切替<br>3. 地図をドラッグで囲む<br>4. 自動スキャン開始！</div></div>`;
+    return;
+  }
+  if (filtered.length===0) { list.innerHTML=`<div class="empty-state"><div class="empty-state-text">該当なし</div></div>`; return; }
+
+  const labels={solar:'✅ ソーラーあり','no-solar':'❌ ソーラーなし',unknown:'❓ データなし',loading:'⏳ 検索中...'};
+  list.innerHTML=[...filtered].reverse().map(f=>`
+    <div class="flag-item ${f.status==='solar'?'has-solar':f.status==='no-solar'?'no-solar':f.status==='loading'?'loading':''}"
+         data-id="${f.id}" onclick="panToFlag('${f.id}')">
+      <button class="flag-delete" onclick="event.stopPropagation();deleteFlag('${f.id}')">×</button>
+      <div class="flag-id"># ${f.id}</div>
+      <div class="flag-address">${f.address}</div>
+      <div class="flag-status">
+        <div class="status-dot ${f.status==='solar'?'solar':f.status==='no-solar'?'no-solar':f.status==='loading'?'loading':'unknown'}"></div>
+        ${labels[f.status]||'不明'}
+      </div>
+      ${f.panelCount?`<div class="solar-score">パネル最大: ${f.panelCount}枚 | 屋根: ${f.roofArea}㎡</div>`:''}
+    </div>`).join('');
+}
+
+function panToFlag(id) {
+  const f=flags.find(f=>f.id===id);
+  if (f) { map.panTo({lat:f.lat,lng:f.lng}); map.setZoom(18); }
+}
+
+function deleteFlag(id) {
+  flags=flags.filter(f=>f.id!==id);
+  const mi=markers.findIndex(m=>m.id===id);
+  if (mi!==-1){markers[mi].marker.setMap(null);markers.splice(mi,1);}
+  renderFlags(); updateStats();
+}
+
+function clearAll() {
+  if (!confirm('全フラグを削除しますか？')) return;
+  markers.forEach(m=>m.marker.setMap(null));
+  markers=[]; flags=[]; flagItemCounter={}; currentAreaId=1;
+  renderFlags(); updateStats();
+}
+
+function newArea() {
+  currentAreaId++;
+  alert(`新エリア ${currentAreaId} を開始します。\n住所を検索して次の地域に移動してください。`);
+}
+
+function updateStats() {
+  document.getElementById('totalCount').textContent=flags.length;
+  document.getElementById('solarCount').textContent=flags.filter(f=>f.status==='solar').length;
+  document.getElementById('noSolarCount').textContent=flags.filter(f=>f.status==='no-solar').length;
+}
+
+function searchAddress() {
+  const query=document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  // Try with region bias for Japan first
+  geocoder.geocode({address: query, region: 'JP', language: 'ja'},(results,status)=>{
+    if (status==='OK'){
+      map.setCenter(results[0].geometry.location);
+      map.setZoom(16);
+    } else {
+      // Fallback: try adding 日本
+      geocoder.geocode({address: query+'市', region: 'JP'},(r2,s2)=>{
+        if (s2==='OK'){map.setCenter(r2[0].geometry.location);map.setZoom(16);}
+        else alert('住所が見つかりませんでした。\n例: 栃木県那須塩原市');
+      });
+    }
+  });
+}
+
+document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')searchAddress();});
+
+function exportCSV() {
+  if (!flags.length){alert('フラグがありません');return;}
+  const rows=[['フラグID','緯度','経度','住所','ステータス','パネル最大枚数','屋根面積(㎡)']];
+  flags.forEach(f=>rows.push([f.id,f.lat.toFixed(6),f.lng.toFixed(6),f.address,
+    f.status==='solar'?'ソーラーあり':f.status==='no-solar'?'ソーラーなし':'不明',
+    f.panelCount||'',f.roofArea||'']));
+  const csv='\uFEFF'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`solar_flags_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+</script>
+
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcATWao1nEV93-vh2R8QiUjVpfo9NVegg&callback=initMap&libraries=places"></script>
+</body>
+</html>
