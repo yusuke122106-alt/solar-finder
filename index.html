@@ -23,7 +23,6 @@
   .search-bar input:focus{border-color:var(--accent2);}
   .search-bar input::placeholder{color:var(--text3);}
 
-  /* Force Google autocomplete dropdown to show above everything */
   .pac-container{z-index:99999 !important;background:#1a2333 !important;border:1px solid #1e3a5f !important;border-radius:8px !important;margin-top:4px !important;font-family:'Inter',sans-serif !important;box-shadow:0 8px 24px rgba(0,0,0,0.6) !important;}
   .pac-item{padding:8px 12px !important;color:#94a3b8 !important;border-top:1px solid #1e3a5f !important;cursor:pointer !important;font-size:13px !important;line-height:1.5 !important;}
   .pac-item:hover,.pac-item-selected{background:#111827 !important;}
@@ -52,11 +51,8 @@
   .main{display:flex;flex:1;overflow:hidden;position:relative;}
   #map{flex:1;position:relative;}
 
-  /* Draw overlay - sits on top of map to capture mouse events during area mode */
   #drawOverlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;display:none;cursor:crosshair;}
   #drawOverlay.active{display:block;}
-
-  /* Visual rectangle drawn by user */
   #drawBox{position:absolute;border:2px solid var(--accent);background:rgba(245,158,11,0.12);display:none;pointer-events:none;}
 
   .scan-progress{position:absolute;top:0;left:0;right:0;height:3px;background:var(--border);z-index:20;display:none;}
@@ -66,9 +62,11 @@
   .draw-hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--accent);color:#000;font-size:12px;font-weight:700;padding:7px 18px;border-radius:20px;z-index:15;display:none;pointer-events:none;white-space:nowrap;}
   .draw-hint.show{display:block;}
 
-  .scan-overlay{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(10,15,26,0.96);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:12px;padding:14px 20px;text-align:center;z-index:20;display:none;min-width:230px;}
+  .scan-overlay{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(10,15,26,0.96);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:12px;padding:14px 20px;text-align:center;z-index:20;display:none;min-width:250px;}
   .scan-overlay.show{display:block;}
-  .scan-overlay-title{font-size:13px;font-weight:600;margin-bottom:5px;}
+  .scan-overlay-title{font-size:13px;font-weight:600;margin-bottom:5px;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .scan-phase{font-size:10px;background:var(--accent2);color:white;padding:2px 6px;border-radius:4px;font-weight:700;}
+  .scan-phase.ai{background:linear-gradient(135deg,#6366f1,#8b5cf6);}
   .scan-overlay-sub{font-size:12px;color:var(--text2);margin-bottom:10px;}
   .mini-progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:8px;}
   .mini-progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 0.3s;}
@@ -106,7 +104,13 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .flag-delete{position:absolute;top:6px;right:6px;width:18px;height:18px;background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:4px;transition:all 0.2s;}
   .flag-delete:hover{background:var(--danger);color:white;}
+
   .solar-score{font-size:10px;color:var(--text3);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .confidence-row{display:flex;align-items:center;gap:5px;margin-top:4px;}
+  .confidence-bar{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .confidence-fill{height:100%;background:linear-gradient(90deg,var(--success),#34d399);border-radius:2px;transition:width 0.3s;}
+  .confidence-pct{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:30px;}
+  .ai-badge{font-size:9px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;}
 
   .empty-state{text-align:center;padding:28px 14px;color:var(--text3);}
   .empty-state-icon{font-size:26px;margin-bottom:10px;}
@@ -148,16 +152,17 @@
 
 <div class="main">
   <div id="map">
-    <!-- Transparent overlay for drawing - captures mouse without interfering with map -->
     <div id="drawOverlay"></div>
     <div id="drawBox"></div>
-
     <div class="scan-progress" id="scanProgress">
       <div class="scan-progress-bar" id="scanProgressBar"></div>
     </div>
     <div class="draw-hint" id="drawHint">🖱️ ドラッグして調査エリアを囲んでください</div>
     <div class="scan-overlay" id="scanOverlay">
-      <div class="scan-overlay-title">🔍 エリアをスキャン中...</div>
+      <div class="scan-overlay-title">
+        <span id="scanPhaseLabel">🔍 建物を確認中...</span>
+        <span class="scan-phase" id="scanPhaseBadge">STEP 1/2</span>
+      </div>
       <div class="scan-overlay-sub" id="scanStatus">準備中...</div>
       <div class="mini-progress"><div class="mini-progress-bar" id="miniProgressBar" style="width:0%"></div></div>
       <button class="cancel-btn" onclick="cancelScan()">キャンセル</button>
@@ -180,15 +185,16 @@
     </div>
     <div class="flags-list" id="flagsList">
       <div class="empty-state">
-        <div class="empty-state-icon">🗺️</div>
+        <div class="empty-state-icon">🛰️</div>
         <div class="empty-state-text">
           <strong style="color:var(--text)">使い方</strong><br>
           1. 市名を入力 → 候補を選ぶ<br>
           2. 「エリア自動」をクリック<br>
           3. 地図の上でドラッグ<br>
-          4. 自動スキャン開始！<br><br>
-          🟢 = ソーラーあり（訪問不要）<br>
-          🔴 = ソーラーなし（営業対象！）
+          4. AI が自動スキャン！<br><br>
+          🟢 = ソーラーあり（蓄電池営業対象）<br>
+          🔴 = ソーラーなし<br><br>
+          <span style="color:var(--accent2);font-size:10px">✨ Cloud Vision AI で衛星写真を解析</span>
         </div>
       </div>
     </div>
@@ -202,19 +208,25 @@
 
 <script>
 const API_KEY = 'AIzaSyBcATWao1nEV93-vh2R8QiUjVpfo9NVegg';
+
+// Solar-related keywords for Vision API label matching
+const SOLAR_KEYWORDS = [
+  'solar panel', 'photovoltaic', 'solar cell', 'solar energy',
+  'solar array', 'solar collector', 'solar farm', 'solar power',
+  'photovoltaic system', 'solar module'
+];
+
 let map, geocoder, autocomplete;
-let markers = [], flags = [];
-let currentAreaId = 1, flagItemCounter = {};
+let flags = [], markers = [];
+let solarLabelCounter = 0; // counts only solar-panel houses for set numbering
 let currentMode = 'click', currentFilter2 = 'all';
 let isCancelled = false;
+let isDrawing = false, drawStartX, drawStartY, drawStartLat, drawStartLng;
 
-// ── Draw state (uses DOM overlay, NOT Google Maps events) ──
-let isDrawing = false;
-let drawStartX, drawStartY, drawStartLat, drawStartLng;
 const drawOverlay = document.getElementById('drawOverlay');
 const drawBox = document.getElementById('drawBox');
 
-// ── Init ─────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────
 function initMap() {
   map = new google.maps.Map(document.getElementById('map'), {
     center: { lat: 36.5657, lng: 139.8836 },
@@ -226,180 +238,171 @@ function initMap() {
   });
   geocoder = new google.maps.Geocoder();
 
-  // Places Autocomplete — Japan only, bias to current map view
   autocomplete = new google.maps.places.Autocomplete(
     document.getElementById('searchInput'),
-    {
-      componentRestrictions: { country: 'JP' },
-      fields: ['geometry', 'name', 'formatted_address'],
-      types: ['geocode', 'establishment'],
-    }
+    { componentRestrictions: { country: 'JP' }, fields: ['geometry', 'name', 'formatted_address'], types: ['geocode', 'establishment'] }
   );
-
-  // Bias autocomplete results to current map viewport
   autocomplete.bindTo('bounds', map);
-
-  // When user picks from dropdown
   autocomplete.addListener('place_changed', () => {
     const place = autocomplete.getPlace();
     if (place.geometry?.location) {
       map.setCenter(place.geometry.location);
-      if (place.geometry.viewport) {
-        map.fitBounds(place.geometry.viewport);
-      } else {
-        map.setZoom(16);
-      }
+      place.geometry.viewport ? map.fitBounds(place.geometry.viewport) : map.setZoom(16);
       showToast('📍 ' + (place.formatted_address || place.name));
     }
   });
 
-  // Individual click mode
   map.addListener('click', (e) => {
     if (currentMode === 'click') addFlag(e.latLng.lat(), e.latLng.lng());
   });
 
-  // Draw overlay mouse events
   drawOverlay.addEventListener('mousedown', onOverlayMouseDown);
   drawOverlay.addEventListener('mousemove', onOverlayMouseMove);
   drawOverlay.addEventListener('mouseup', onOverlayMouseUp);
-  // Touch support
-  drawOverlay.addEventListener('touchstart', onTouchStart, {passive:false});
-  drawOverlay.addEventListener('touchmove', onTouchMove, {passive:false});
+  drawOverlay.addEventListener('touchstart', onTouchStart, { passive: false });
+  drawOverlay.addEventListener('touchmove', onTouchMove, { passive: false });
   drawOverlay.addEventListener('touchend', onTouchEnd);
 }
 
-// ── Search ───────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────
 function searchAddress() {
   const raw = document.getElementById('searchInput').value.trim();
   if (!raw) return;
-
-  // Try progressively more specific queries
   const queries = [raw, raw + '市', raw + '市 栃木', raw + ' 日本'];
   let idx = 0;
-
   function tryNext() {
-    if (idx >= queries.length) {
-      showToast('❌ 見つかりませんでした。もう少し詳しく入力してください。');
-      return;
-    }
-    geocoder.geocode(
-      { address: queries[idx], region: 'JP', language: 'ja' },
-      (results, status) => {
-        if (status === 'OK' && results[0]) {
-          const loc = results[0].geometry.location;
-          map.setCenter(loc);
-          if (results[0].geometry.viewport) {
-            map.fitBounds(results[0].geometry.viewport);
-          } else {
-            map.setZoom(16);
-          }
-          showToast('📍 ' + results[0].formatted_address);
-        } else {
-          idx++;
-          tryNext();
-        }
-      }
-    );
+    if (idx >= queries.length) { showToast('❌ 見つかりませんでした。'); return; }
+    geocoder.geocode({ address: queries[idx], region: 'JP', language: 'ja' }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        map.setCenter(results[0].geometry.location);
+        results[0].geometry.viewport ? map.fitBounds(results[0].geometry.viewport) : map.setZoom(16);
+        showToast('📍 ' + results[0].formatted_address);
+      } else { idx++; tryNext(); }
+    });
   }
   tryNext();
 }
 
 document.getElementById('searchInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    // Wait briefly for autocomplete selection, then fallback to geocoder
-    setTimeout(() => {
-      const place = autocomplete.getPlace();
-      if (!place || !place.geometry) searchAddress();
-    }, 150);
-  }
+  if (e.key === 'Enter') setTimeout(() => { const p = autocomplete.getPlace(); if (!p?.geometry) searchAddress(); }, 150);
 });
 
-// ── Mode ─────────────────────────────────────────────────
+// ── Mode ──────────────────────────────────────────────────
 function setMode(mode) {
   currentMode = mode;
   document.getElementById('modeClick').classList.toggle('active', mode === 'click');
   document.getElementById('modeArea').classList.toggle('active', mode === 'area');
   document.getElementById('drawHint').classList.toggle('show', mode === 'area');
-  // Show/hide the draw overlay
   drawOverlay.classList.toggle('active', mode === 'area');
 }
 
-// ── DOM-based draw (no conflict with Google Maps drag) ────
+// ── Draw overlay ──────────────────────────────────────────
 function getMapCoords(clientX, clientY) {
-  const mapDiv = document.getElementById('map');
-  const rect = mapDiv.getBoundingClientRect();
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
-  // Convert pixel to lat/lng using map projection
-  const projection = map.getProjection();
+  const rect = document.getElementById('map').getBoundingClientRect();
+  const x = clientX - rect.left, y = clientY - rect.top;
   const bounds = map.getBounds();
-  const ne = bounds.getNorthEast();
-  const sw = bounds.getSouthWest();
-  const lng = sw.lng() + (x / rect.width) * (ne.lng() - sw.lng());
-  const lat = ne.lat() - (y / rect.height) * (ne.lat() - sw.lat());
-  return { lat, lng, px: x, py: y };
+  const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
+  return {
+    lat: ne.lat() - (y / rect.height) * (ne.lat() - sw.lat()),
+    lng: sw.lng() + (x / rect.width) * (ne.lng() - sw.lng()),
+    px: x, py: y
+  };
 }
 
 function onOverlayMouseDown(e) {
   e.preventDefault();
   isDrawing = true;
-  const coords = getMapCoords(e.clientX, e.clientY);
-  drawStartX = coords.px;
-  drawStartY = coords.py;
-  drawStartLat = coords.lat;
-  drawStartLng = coords.lng;
-  drawBox.style.left = drawStartX + 'px';
-  drawBox.style.top = drawStartY + 'px';
-  drawBox.style.width = '0px';
-  drawBox.style.height = '0px';
-  drawBox.style.display = 'block';
+  const c = getMapCoords(e.clientX, e.clientY);
+  drawStartX = c.px; drawStartY = c.py; drawStartLat = c.lat; drawStartLng = c.lng;
+  Object.assign(drawBox.style, { left: c.px+'px', top: c.py+'px', width: '0px', height: '0px', display: 'block' });
 }
-
 function onOverlayMouseMove(e) {
   if (!isDrawing) return;
   e.preventDefault();
-  const coords = getMapCoords(e.clientX, e.clientY);
-  const x = Math.min(drawStartX, coords.px);
-  const y = Math.min(drawStartY, coords.py);
-  const w = Math.abs(coords.px - drawStartX);
-  const h = Math.abs(coords.py - drawStartY);
-  drawBox.style.left = x + 'px';
-  drawBox.style.top = y + 'px';
-  drawBox.style.width = w + 'px';
-  drawBox.style.height = h + 'px';
+  const c = getMapCoords(e.clientX, e.clientY);
+  Object.assign(drawBox.style, {
+    left: Math.min(drawStartX, c.px)+'px', top: Math.min(drawStartY, c.py)+'px',
+    width: Math.abs(c.px - drawStartX)+'px', height: Math.abs(c.py - drawStartY)+'px'
+  });
 }
-
 function onOverlayMouseUp(e) {
   if (!isDrawing) return;
   isDrawing = false;
   drawBox.style.display = 'none';
-  const coords = getMapCoords(e.clientX, e.clientY);
-  const endLat = coords.lat;
-  const endLng = coords.lng;
-  const latDiff = Math.abs(endLat - drawStartLat);
-  const lngDiff = Math.abs(endLng - drawStartLng);
-  if (latDiff < 0.0003 || lngDiff < 0.0003) {
-    showToast('エリアが小さすぎます。もっと大きく囲んでください。');
-    return;
+  const c = getMapCoords(e.clientX, e.clientY);
+  if (Math.abs(c.lat - drawStartLat) < 0.0003 || Math.abs(c.lng - drawStartLng) < 0.0003) {
+    showToast('エリアが小さすぎます。もっと大きく囲んでください。'); return;
   }
-  const bounds = new google.maps.LatLngBounds(
-    new google.maps.LatLng(Math.min(drawStartLat, endLat), Math.min(drawStartLng, endLng)),
-    new google.maps.LatLng(Math.max(drawStartLat, endLat), Math.max(drawStartLng, endLng))
-  );
-  startAreaScan(bounds);
+  startAreaScan(new google.maps.LatLngBounds(
+    new google.maps.LatLng(Math.min(drawStartLat, c.lat), Math.min(drawStartLng, c.lng)),
+    new google.maps.LatLng(Math.max(drawStartLat, c.lat), Math.max(drawStartLng, c.lng))
+  ));
+}
+function onTouchStart(e) { e.preventDefault(); onOverlayMouseDown(e.touches[0]); }
+function onTouchMove(e) { e.preventDefault(); onOverlayMouseMove(e.touches[0]); }
+function onTouchEnd(e) { onOverlayMouseUp(e.changedTouches[0]); }
+
+// ── Cloud Vision API ──────────────────────────────────────
+async function detectSolarWithVision(lat, lng) {
+  // Satellite image of the building at zoom 20
+  const imageUri = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=400x400&maptype=satellite&key=${API_KEY}`;
+
+  const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        image: { source: { imageUri } },
+        features: [
+          { type: 'LABEL_DETECTION', maxResults: 20 },
+          { type: 'OBJECT_LOCALIZATION', maxResults: 10 }
+        ]
+      }]
+    })
+  });
+
+  if (!resp.ok) throw new Error('Vision API: ' + resp.status);
+  const data = await resp.json();
+  const res = data.responses?.[0] || {};
+
+  const labels = (res.labelAnnotations || []).map(l => ({ name: l.description.toLowerCase(), score: l.score, display: l.description }));
+  const objects = (res.localizedObjectAnnotations || []).map(o => ({ name: o.name.toLowerCase(), score: o.score, display: o.name }));
+  const all = [...labels, ...objects];
+
+  // Find highest-scoring solar-related match
+  let bestScore = 0, bestLabel = '';
+  for (const item of all) {
+    if (SOLAR_KEYWORDS.some(kw => item.name.includes(kw) || kw.includes(item.name))) {
+      if (item.score > bestScore) { bestScore = item.score; bestLabel = item.display; }
+    }
+  }
+
+  return {
+    hasSolar: bestScore > 0.25,
+    confidence: Math.round(bestScore * 100),
+    matchedLabel: bestLabel,
+    topLabels: labels.slice(0, 5).map(l => l.display)
+  };
 }
 
-// Touch support
-function onTouchStart(e) {
-  e.preventDefault();
-  onOverlayMouseDown(e.touches[0]);
+// ── Solar label numbering (50 per set) ───────────────────
+function nextSolarLabel() {
+  solarLabelCounter++;
+  const setNum = Math.ceil(solarLabelCounter / 50);
+  const itemNum = ((solarLabelCounter - 1) % 50) + 1;
+  return `${setNum}-${itemNum}`;
 }
-function onTouchMove(e) {
-  e.preventDefault();
-  onOverlayMouseMove(e.touches[0]);
-}
-function onTouchEnd(e) {
-  onOverlayMouseUp(e.changedTouches[0]);
+
+function renumberSolarFlags() {
+  let count = 0;
+  flags.filter(f => f.status === 'solar').forEach(f => {
+    count++;
+    const setNum = Math.ceil(count / 50);
+    const itemNum = ((count - 1) % 50) + 1;
+    f.label = `${setNum}-${itemNum}`;
+    updateMarker(f);
+  });
+  solarLabelCounter = count;
 }
 
 // ── Area Scan ─────────────────────────────────────────────
@@ -407,8 +410,7 @@ async function startAreaScan(bounds) {
   isCancelled = false;
   document.getElementById('drawHint').classList.remove('show');
   const ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
-  const latDiff = ne.lat() - sw.lat();
-  const lngDiff = ne.lng() - sw.lng();
+  const latDiff = ne.lat() - sw.lat(), lngDiff = ne.lng() - sw.lng();
   const latM = latDiff * 111000;
   const lngM = lngDiff * 111000 * Math.cos(sw.lat() * Math.PI / 180);
   const stepsLat = Math.min(Math.max(Math.round(latM / 40), 3), 15);
@@ -420,27 +422,82 @@ async function startAreaScan(bounds) {
       points.push({ lat: sw.lat() + (latDiff / stepsLat) * i, lng: sw.lng() + (lngDiff / stepsLng) * j });
 
   const total = points.length;
-  let done = 0;
   document.getElementById('scanOverlay').classList.add('show');
   document.getElementById('scanProgress').classList.add('show');
 
-  for (const pt of points) {
+  // Phase 1: building confirmation (Solar API)
+  document.getElementById('scanPhaseLabel').textContent = '🏠 建物を確認中...';
+  document.getElementById('scanPhaseBadge').textContent = 'STEP 1/2';
+  document.getElementById('scanPhaseBadge').classList.remove('ai');
+  const buildings = [];
+  for (let i = 0; i < points.length; i++) {
     if (isCancelled) break;
-    done++;
-    const pct = Math.round((done / total) * 100);
-    document.getElementById('scanStatus').textContent = `${done} / ${total} ポイント検索中`;
+    const pct = Math.round(((i + 1) / total) * 50);
+    document.getElementById('scanStatus').textContent = `${i + 1} / ${total} ポイント確認中`;
     document.getElementById('miniProgressBar').style.width = pct + '%';
     document.getElementById('scanProgressBar').style.width = pct + '%';
-    await addFlag(pt.lat, pt.lng, true);
-    await sleep(120);
+
+    const pt = points[i];
+    if (isTooClose(pt.lat, pt.lng)) continue;
+
+    try {
+      const r = await fetch(
+        `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${pt.lat}&location.longitude=${pt.lng}&requiredQuality=LOW&key=${API_KEY}`
+      );
+      const d = await r.json();
+      if (!d.error) {
+        const center = d.center
+          ? { lat: d.center.latitude, lng: d.center.longitude }
+          : { lat: pt.lat, lng: pt.lng };
+        if (!isTooClose(center.lat, center.lng)) {
+          buildings.push({
+            lat: center.lat, lng: center.lng,
+            panelCount: d.solarPotential?.maxArrayPanelsCount || null,
+            roofArea: d.solarPotential?.wholeRoofStats?.areaMeters2?.toFixed(0) || null
+          });
+          // Mark as claimed to avoid duplicates
+          flags.push({ uid: `tmp-${center.lat}-${center.lng}`, lat: center.lat, lng: center.lng, status: '_reserved' });
+        }
+      }
+    } catch {}
+    await sleep(100);
+  }
+
+  // Clean up reserved markers
+  flags = flags.filter(f => f.status !== '_reserved');
+
+  if (isCancelled) {
+    document.getElementById('scanOverlay').classList.remove('show');
+    document.getElementById('scanProgress').classList.remove('show');
+    document.getElementById('drawHint').classList.add('show');
+    return;
+  }
+
+  // Phase 2: AI Vision detection
+  document.getElementById('scanPhaseLabel').textContent = '🤖 AI でソーラー検出中...';
+  document.getElementById('scanPhaseBadge').textContent = 'STEP 2/2';
+  document.getElementById('scanPhaseBadge').classList.add('ai');
+
+  const bTotal = buildings.length;
+  for (let i = 0; i < buildings.length; i++) {
+    if (isCancelled) break;
+    const b = buildings[i];
+    const pct = 50 + Math.round(((i + 1) / bTotal) * 50);
+    document.getElementById('scanStatus').textContent = `${i + 1} / ${bTotal} 棟 AI解析中`;
+    document.getElementById('miniProgressBar').style.width = pct + '%';
+    document.getElementById('scanProgressBar').style.width = pct + '%';
+
+    await addFlagFromBuilding(b.lat, b.lng, b.panelCount, b.roofArea);
+    await sleep(300);
   }
 
   document.getElementById('scanOverlay').classList.remove('show');
   document.getElementById('scanProgress').classList.remove('show');
   document.getElementById('scanProgressBar').style.width = '0%';
   document.getElementById('drawHint').classList.add('show');
-  const found = flags.filter(f => f.status === 'solar').length;
-  showToast(`✅ スキャン完了！ ソーラーあり: ${found}件`);
+
+  const solarFound = flags.filter(f => f.status === 'solar').length;
+  showToast(`✅ AI スキャン完了！ ソーラーあり: ${solarFound}件`);
 }
 
 function cancelScan() {
@@ -450,74 +507,134 @@ function cancelScan() {
   document.getElementById('drawHint').classList.add('show');
 }
 
-// ── Add Flag ──────────────────────────────────────────────
-function isTooClose(lat, lng) {
-  return flags.some(f => Math.abs(f.lat - lat) < 0.00008 && Math.abs(f.lng - lng) < 0.00008);
-}
-
-async function addFlag(lat, lng, silent = false) {
+// ── Add Flag (individual click) ───────────────────────────
+async function addFlag(lat, lng) {
   if (isTooClose(lat, lng)) return;
-  let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  try {
-    address = await new Promise((res, rej) => {
-      geocoder.geocode({ location: { lat, lng }, language: 'ja' }, (r, s) =>
-        s === 'OK' && r[0] ? res(r[0].formatted_address) : rej()
-      );
-    });
-  } catch {}
 
-  const areaId = currentAreaId;
-  if (!flagItemCounter[areaId]) flagItemCounter[areaId] = 0;
-  flagItemCounter[areaId]++;
-  const flagId = `${areaId}-${flagItemCounter[areaId]}`;
-  const flag = { id: flagId, lat, lng, address, status: 'loading', panelCount: null, roofArea: null };
+  const uid = `uid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const address = await reverseGeocode(lat, lng);
+  const flag = { uid, label: '...', lat, lng, address, status: 'loading', confidence: null, matchedLabel: '', panelCount: null, roofArea: null };
   flags.push(flag);
   renderFlags();
   addMarker(flag);
 
   try {
-    const resp = await fetch(
+    // Confirm building
+    const r = await fetch(
       `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=LOW&key=${API_KEY}`
     );
-    const data = await resp.json();
-    if (data.error?.code === 404) {
-      // No building — remove silently
-      flags = flags.filter(f => f.id !== flag.id);
-      const mi = markers.findIndex(m => m.id === flag.id);
-      if (mi !== -1) { markers[mi].marker.setMap(null); markers.splice(mi, 1); }
-      renderFlags(); updateStats(); return;
+    const d = await r.json();
+    if (d.error?.code === 404) {
+      removeFlagByUid(uid);
+      showToast('🏢 建物が見つかりませんでした');
+      return;
     }
-    if (!data.error && data.solarPotential?.maxArrayPanelsCount > 0) {
-      flag.status = 'solar';
-      flag.panelCount = data.solarPotential.maxArrayPanelsCount;
-      flag.roofArea = data.solarPotential.wholeRoofStats?.areaMeters2?.toFixed(0);
-    } else {
-      flag.status = 'no-solar';
+    if (d.solarPotential) {
+      flag.panelCount = d.solarPotential.maxArrayPanelsCount;
+      flag.roofArea = d.solarPotential.wholeRoofStats?.areaMeters2?.toFixed(0);
     }
-  } catch { flag.status = 'no-solar'; }
+    const center = d.center ? { lat: d.center.latitude, lng: d.center.longitude } : { lat, lng };
 
-  renderFlags(); updateMarker(flag); updateStats();
+    // AI detection
+    const vision = await detectSolarWithVision(center.lat, center.lng);
+    applyVisionResult(flag, vision);
+  } catch (e) {
+    console.error(e);
+    flag.label = '-';
+    flag.status = 'no-solar';
+  }
+
+  renderFlags();
+  updateMarker(flag);
+  updateStats();
+}
+
+// ── Add Flag (from area scan, building already confirmed) ─
+async function addFlagFromBuilding(lat, lng, panelCount, roofArea) {
+  if (isTooClose(lat, lng)) return;
+
+  const uid = `uid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const address = await reverseGeocode(lat, lng);
+  const flag = { uid, label: '...', lat, lng, address, status: 'loading', confidence: null, matchedLabel: '', panelCount, roofArea };
+  flags.push(flag);
+  renderFlags();
+  addMarker(flag);
+
+  try {
+    const vision = await detectSolarWithVision(lat, lng);
+    applyVisionResult(flag, vision);
+  } catch (e) {
+    console.error(e);
+    flag.label = '-';
+    flag.status = 'no-solar';
+  }
+
+  renderFlags();
+  updateMarker(flag);
+  updateStats();
+}
+
+function applyVisionResult(flag, vision) {
+  flag.confidence = vision.confidence;
+  flag.matchedLabel = vision.matchedLabel;
+  if (vision.hasSolar) {
+    flag.label = nextSolarLabel();
+    flag.status = 'solar';
+  } else {
+    flag.label = '';
+    flag.status = 'no-solar';
+  }
+}
+
+async function reverseGeocode(lat, lng) {
+  try {
+    return await new Promise((res, rej) =>
+      geocoder.geocode({ location: { lat, lng }, language: 'ja' }, (r, s) =>
+        s === 'OK' && r[0] ? res(r[0].formatted_address) : rej()
+      )
+    );
+  } catch {
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+}
+
+// ── Proximity check ───────────────────────────────────────
+function isTooClose(lat, lng) {
+  return flags.some(f => f.status !== '_reserved' && Math.abs(f.lat - lat) < 0.00008 && Math.abs(f.lng - lng) < 0.00008);
 }
 
 // ── Markers ───────────────────────────────────────────────
 function addMarker(flag) {
+  const { color, scale } = markerStyle(flag.status);
   const marker = new google.maps.Marker({
-    position: { lat: flag.lat, lng: flag.lng }, map,
-    label: { text: flag.id, color: '#fff', fontSize: '9px', fontWeight: 'bold' },
-    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: '#f59e0b', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
-    title: flag.address, zIndex: 10,
+    position: { lat: flag.lat, lng: flag.lng },
+    map,
+    label: flag.status === 'solar' && flag.label
+      ? { text: flag.label, color: '#fff', fontSize: '9px', fontWeight: 'bold' }
+      : null,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: flag.status === 'solar' ? 2 : 1 },
+    title: flag.address,
+    zIndex: flag.status === 'solar' ? 20 : 5,
   });
   marker.addListener('click', () =>
-    document.querySelector(`[data-id="${flag.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    document.querySelector(`[data-uid="${flag.uid}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   );
-  markers.push({ id: flag.id, marker });
+  markers.push({ uid: flag.uid, marker });
 }
 
 function updateMarker(flag) {
-  const m = markers.find(m => m.id === flag.id);
+  const m = markers.find(m => m.uid === flag.uid);
   if (!m) return;
-  const colors = { solar: '#10b981', 'no-solar': '#ef4444', unknown: '#64748b', loading: '#f59e0b' };
-  m.marker.setIcon({ path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: colors[flag.status] || '#f59e0b', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 });
+  const { color, scale } = markerStyle(flag.status);
+  m.marker.setIcon({ path: google.maps.SymbolPath.CIRCLE, scale, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: flag.status === 'solar' ? 2 : 1 });
+  m.marker.setLabel(flag.status === 'solar' && flag.label ? { text: flag.label, color: '#fff', fontSize: '9px', fontWeight: 'bold' } : null);
+  m.marker.setZIndex(flag.status === 'solar' ? 20 : 5);
+}
+
+function markerStyle(status) {
+  if (status === 'solar')    return { color: '#10b981', scale: 14 };
+  if (status === 'no-solar') return { color: '#ef4444', scale: 6 };
+  return { color: '#f59e0b', scale: 10 }; // loading
 }
 
 // ── Render ────────────────────────────────────────────────
@@ -531,13 +648,15 @@ function setFilter(f) {
 
 function renderFlags() {
   const list = document.getElementById('flagsList');
-  document.getElementById('flagBadge').textContent = flags.length;
-  let filtered = flags;
-  if (currentFilter2 === 'solar') filtered = flags.filter(f => f.status === 'solar');
-  if (currentFilter2 === 'nosolar') filtered = flags.filter(f => f.status === 'no-solar');
+  const visible = flags.filter(f => f.status !== '_reserved');
+  document.getElementById('flagBadge').textContent = visible.length;
 
-  if (flags.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🗺️</div><div class="empty-state-text"><strong style="color:var(--text)">使い方</strong><br>1. 市名を入力 → 候補を選ぶ<br>2. 「エリア自動」をクリック<br>3. 地図の上でドラッグ<br>4. 自動スキャン開始！<br><br>🟢 = ソーラーあり（訪問不要）<br>🔴 = ソーラーなし（営業対象！）</div></div>`;
+  let filtered = visible;
+  if (currentFilter2 === 'solar')   filtered = visible.filter(f => f.status === 'solar');
+  if (currentFilter2 === 'nosolar') filtered = visible.filter(f => f.status === 'no-solar');
+
+  if (visible.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🛰️</div><div class="empty-state-text"><strong style="color:var(--text)">使い方</strong><br>1. 市名を入力 → 候補を選ぶ<br>2. 「エリア自動」をクリック<br>3. 地図の上でドラッグ<br>4. AI が自動スキャン！<br><br>🟢 = ソーラーあり（蓄電池営業対象）<br>🔴 = ソーラーなし<br><br><span style="color:var(--accent2);font-size:10px">✨ Cloud Vision AI で衛星写真を解析</span></div></div>`;
     return;
   }
   if (filtered.length === 0) {
@@ -545,67 +664,99 @@ function renderFlags() {
     return;
   }
 
-  const labels = { solar: '✅ ソーラーあり', 'no-solar': '❌ ソーラーなし', unknown: '❓ データなし', loading: '⏳ 検索中...' };
+  const labels = { solar: '✅ ソーラーあり', 'no-solar': '❌ ソーラーなし', loading: '⏳ AI解析中...' };
   list.innerHTML = [...filtered].reverse().map(f => `
-    <div class="flag-item ${f.status === 'solar' ? 'has-solar' : f.status === 'no-solar' ? 'no-solar' : f.status === 'loading' ? 'loading' : ''}"
-         data-id="${f.id}" onclick="panToFlag('${f.id}')">
-      <button class="flag-delete" onclick="event.stopPropagation();deleteFlag('${f.id}')">×</button>
-      <div class="flag-id"># ${f.id}</div>
+    <div class="flag-item ${f.status === 'solar' ? 'has-solar' : f.status === 'no-solar' ? 'no-solar' : 'loading'}"
+         data-uid="${f.uid}" onclick="panToFlag('${f.uid}')">
+      <button class="flag-delete" onclick="event.stopPropagation();deleteFlag('${f.uid}')">×</button>
+      <div class="flag-id">
+        ${f.status === 'solar' ? `# ${f.label}` : f.status === 'loading' ? '解析中...' : '対象外'}
+        <span class="ai-badge">AI</span>
+      </div>
       <div class="flag-address">${f.address}</div>
       <div class="flag-status">
-        <div class="status-dot ${f.status === 'solar' ? 'solar' : f.status === 'no-solar' ? 'no-solar' : f.status === 'loading' ? 'loading' : 'unknown'}"></div>
+        <div class="status-dot ${f.status === 'solar' ? 'solar' : f.status === 'no-solar' ? 'no-solar' : 'loading'}"></div>
         ${labels[f.status] || '不明'}
+        ${f.confidence != null ? `<span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:4px">(確信度 ${f.confidence}%)</span>` : ''}
       </div>
-      ${f.panelCount ? `<div class="solar-score">パネル最大: ${f.panelCount}枚 | 屋根: ${f.roofArea}㎡</div>` : ''}
+      ${f.status === 'solar' && f.confidence != null ? `
+        <div class="confidence-row">
+          <div class="confidence-bar"><div class="confidence-fill" style="width:${f.confidence}%"></div></div>
+          <span class="confidence-pct">${f.confidence}%</span>
+        </div>` : ''}
+      ${f.matchedLabel ? `<div class="solar-score">検出: ${f.matchedLabel}</div>` : ''}
+      ${f.panelCount ? `<div class="solar-score">屋根ポテンシャル: ${f.panelCount}枚 | ${f.roofArea}㎡</div>` : ''}
     </div>`).join('');
 }
 
-function panToFlag(id) {
-  const f = flags.find(f => f.id === id);
+function panToFlag(uid) {
+  const f = flags.find(f => f.uid === uid);
   if (f) { map.panTo({ lat: f.lat, lng: f.lng }); map.setZoom(19); }
 }
 
-function deleteFlag(id) {
-  flags = flags.filter(f => f.id !== id);
-  const mi = markers.findIndex(m => m.id === id);
+function deleteFlag(uid) {
+  const idx = flags.findIndex(f => f.uid === uid);
+  if (idx === -1) return;
+  const wasSolar = flags[idx].status === 'solar';
+  const mi = markers.findIndex(m => m.uid === uid);
   if (mi !== -1) { markers[mi].marker.setMap(null); markers.splice(mi, 1); }
-  renderFlags(); updateStats();
+  flags.splice(idx, 1);
+  if (wasSolar) renumberSolarFlags();
+  renderFlags();
+  updateStats();
+}
+
+function removeFlagByUid(uid) {
+  const idx = flags.findIndex(f => f.uid === uid);
+  if (idx !== -1) {
+    const mi = markers.findIndex(m => m.uid === uid);
+    if (mi !== -1) { markers[mi].marker.setMap(null); markers.splice(mi, 1); }
+    flags.splice(idx, 1);
+  }
+  renderFlags();
+  updateStats();
 }
 
 function clearAll() {
   if (!confirm('全フラグを削除しますか？')) return;
   markers.forEach(m => m.marker.setMap(null));
-  markers = []; flags = []; flagItemCounter = {}; currentAreaId = 1;
+  markers = []; flags = []; solarLabelCounter = 0;
   renderFlags(); updateStats();
 }
 
 function newArea() {
-  currentAreaId++;
-  showToast(`➕ 新エリア ${currentAreaId} 開始！次の地域に移動してください。`);
+  showToast(`➕ 新エリア開始！ 現在 ${solarLabelCounter} 件 (セット${Math.ceil(solarLabelCounter/50)||1})`);
 }
 
 function updateStats() {
-  document.getElementById('totalCount').textContent = flags.length;
-  document.getElementById('solarCount').textContent = flags.filter(f => f.status === 'solar').length;
-  document.getElementById('noSolarCount').textContent = flags.filter(f => f.status === 'no-solar').length;
+  const visible = flags.filter(f => f.status !== '_reserved');
+  document.getElementById('totalCount').textContent = visible.length;
+  document.getElementById('solarCount').textContent = visible.filter(f => f.status === 'solar').length;
+  document.getElementById('noSolarCount').textContent = visible.filter(f => f.status === 'no-solar').length;
 }
 
+// ── CSV Export ────────────────────────────────────────────
 function exportCSV() {
-  if (!flags.length) { showToast('フラグがありません'); return; }
-  const rows = [['フラグID', '緯度', '経度', '住所', 'ステータス', 'パネル最大枚数', '屋根面積(㎡)']];
-  flags.forEach(f => rows.push([
-    f.id, f.lat.toFixed(6), f.lng.toFixed(6), f.address,
-    f.status === 'solar' ? 'ソーラーあり' : f.status === 'no-solar' ? 'ソーラーなし' : '不明',
+  const exportable = flags.filter(f => f.status === 'solar' || f.status === 'no-solar');
+  if (!exportable.length) { showToast('フラグがありません'); return; }
+  const rows = [['ラベル', '緯度', '経度', '住所', 'ステータス', 'AI確信度(%)', '検出ラベル', 'パネルポテンシャル(枚)', '屋根面積(㎡)']];
+  exportable.forEach(f => rows.push([
+    f.status === 'solar' ? f.label : '',
+    f.lat.toFixed(6), f.lng.toFixed(6), f.address,
+    f.status === 'solar' ? 'ソーラーあり' : 'ソーラーなし',
+    f.confidence != null ? f.confidence : '',
+    f.matchedLabel || '',
     f.panelCount || '', f.roofArea || ''
   ]));
-  const csv = '\uFEFF' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const csv = '﻿' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-  a.download = `solar_flags_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `solar_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   showToast('📥 CSVをダウンロードしました！');
 }
 
+// ── Utilities ─────────────────────────────────────────────
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
