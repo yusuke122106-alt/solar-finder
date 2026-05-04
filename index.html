@@ -49,7 +49,8 @@
   .stat-value.red{color:var(--danger);}
 
   .main{display:flex;flex:1;overflow:hidden;position:relative;}
-  #map{flex:1;position:relative;}
+  #mapContainer{flex:1;position:relative;overflow:hidden;}
+  #map{position:absolute;top:0;left:0;right:0;bottom:0;}
 
   #drawOverlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;display:none;cursor:crosshair;}
   #drawOverlay.active{display:block;}
@@ -151,7 +152,8 @@
 </header>
 
 <div class="main">
-  <div id="map">
+  <div id="mapContainer">
+    <div id="map"></div>
     <div id="drawOverlay"></div>
     <div id="drawBox"></div>
     <div class="scan-progress" id="scanProgress">
