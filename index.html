@@ -267,22 +267,41 @@ function initMap() {
 }
 
 // ── Search ────────────────────────────────────────────────
-function searchAddress() {
+async function searchAddress() {
   const raw = document.getElementById('searchInput').value.trim();
   if (!raw) return;
-  const queries = [raw, raw + '市', raw + '市 栃木', raw + ' 日本'];
-  let idx = 0;
-  function tryNext() {
-    if (idx >= queries.length) { showToast('❌ 見つかりませんでした。'); return; }
-    geocoder.geocode({ address: queries[idx], region: 'JP', language: 'ja' }, (results, status) => {
-      if (status === 'OK' && results[0]) {
-        map.setCenter(results[0].geometry.location);
-        results[0].geometry.viewport ? map.fitBounds(results[0].geometry.viewport) : map.setZoom(16);
-        showToast('📍 ' + results[0].formatted_address);
-      } else { idx++; tryNext(); }
-    });
-  }
-  tryNext();
+  showToast('🔍 検索中...');
+
+  // 1st: Google Geocoding REST API
+  try {
+    const q = raw.includes('日本') ? raw : raw + ' 日本';
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&region=JP&language=ja&key=${API_KEY}`);
+    const data = await res.json();
+    if (data.status === 'OK' && data.results[0]) {
+      const r = data.results[0];
+      const vp = r.geometry.viewport;
+      if (vp) map.fitBounds(new google.maps.LatLngBounds({ lat: vp.southwest.lat, lng: vp.southwest.lng }, { lat: vp.northeast.lat, lng: vp.northeast.lng }));
+      else { map.setCenter(r.geometry.location); map.setZoom(15); }
+      showToast('📍 ' + r.formatted_address);
+      return;
+    }
+  } catch(e) {}
+
+  // 2nd: Nominatim (OpenStreetMap) — no API key required
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(raw)}&countrycodes=jp&format=json&limit=1&accept-language=ja`, { headers: { 'User-Agent': 'SolarFinder/1.0' } });
+    const data = await res.json();
+    if (data && data[0]) {
+      const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+      map.setCenter({ lat, lng });
+      map.setZoom(14);
+      const name = data[0].display_name.split(',').slice(0, 3).join(' ');
+      showToast('📍 ' + name);
+      return;
+    }
+  } catch(e) {}
+
+  showToast('❌ 見つかりませんでした');
 }
 
 document.getElementById('searchInput').addEventListener('keydown', e => {
