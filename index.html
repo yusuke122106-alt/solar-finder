@@ -215,8 +215,10 @@ const API_KEY = 'AIzaSyBcATWao1nEV93-vh2R8QiUjVpfo9NVegg';
 const SOLAR_KEYWORDS = [
   'solar panel', 'photovoltaic', 'solar cell', 'solar energy',
   'solar array', 'solar collector', 'solar farm', 'solar power',
-  'photovoltaic system', 'solar module'
+  'photovoltaic system', 'solar module', 'solar', 'panel',
+  'renewable energy', 'green energy', 'rooftop solar', 'pv system'
 ];
+const COMPANY_KEYWORDS = /株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|公益社団法人|NPO法人|社会福祉法人|学校法人|宗教法人|工場|倉庫|事務所|ビル[^街]|病院|クリニック|銀行|店舗|スーパー|コンビニ|ショッピング|ホテル|旅館|公園|神社|寺院|教会|学校|幼稚園|保育|役所|庁舎/;
 
 let map, geocoder, autocomplete;
 let flags = [], markers = [];
@@ -365,18 +367,34 @@ function onTouchEnd(e) { onOverlayMouseUp(e.changedTouches[0]); }
 
 // ── Cloud Vision API ──────────────────────────────────────
 async function detectSolarWithVision(lat, lng) {
-  // Satellite image of the building at zoom 20
-  const imageUri = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=400x400&maptype=satellite&key=${API_KEY}`;
+  const imageUri = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=640x640&maptype=satellite&key=${API_KEY}`;
+
+  // Fetch image client-side and convert to base64 (avoids Vision API server-side URL fetch failures)
+  let imagePayload;
+  try {
+    const imgResp = await fetch(imageUri);
+    if (!imgResp.ok) throw new Error('static map failed');
+    const blob = await imgResp.blob();
+    const base64 = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.readAsDataURL(blob);
+    });
+    imagePayload = { content: base64 };
+  } catch {
+    imagePayload = { source: { imageUri } };
+  }
 
   const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       requests: [{
-        image: { source: { imageUri } },
+        image: imagePayload,
         features: [
-          { type: 'LABEL_DETECTION', maxResults: 20 },
-          { type: 'OBJECT_LOCALIZATION', maxResults: 10 }
+          { type: 'LABEL_DETECTION', maxResults: 30 },
+          { type: 'OBJECT_LOCALIZATION', maxResults: 15 },
+          { type: 'IMAGE_PROPERTIES' }
         ]
       }]
     })
@@ -390,7 +408,6 @@ async function detectSolarWithVision(lat, lng) {
   const objects = (res.localizedObjectAnnotations || []).map(o => ({ name: o.name.toLowerCase(), score: o.score, display: o.name }));
   const all = [...labels, ...objects];
 
-  // Find highest-scoring solar-related match
   let bestScore = 0, bestLabel = '';
   for (const item of all) {
     if (SOLAR_KEYWORDS.some(kw => item.name.includes(kw) || kw.includes(item.name))) {
@@ -398,10 +415,23 @@ async function detectSolarWithVision(lat, lng) {
     }
   }
 
+  // Check image color properties — solar panels appear as uniform dark blue/gray rectangles
+  let colorBoost = 0;
+  const colors = res.imagePropertiesAnnotation?.dominantColors?.colors || [];
+  for (const c of colors) {
+    const { red: r, green: g, blue: b } = c.color;
+    const fraction = c.pixelFraction || 0;
+    // Dark blue/navy typical of solar panels (r<80, g<80, b:80-150) or dark gray metallic (r≈g≈b<80)
+    const isSolarColor = (r < 80 && g < 80 && b > 60 && b < 180 && fraction > 0.05) ||
+                         (Math.abs(r-g) < 25 && Math.abs(g-b) < 25 && r < 80 && fraction > 0.08);
+    if (isSolarColor) colorBoost = Math.max(colorBoost, fraction * 0.6);
+  }
+
+  const effectiveScore = Math.min(1, bestScore + colorBoost);
   return {
-    hasSolar: bestScore > 0.25,
-    confidence: Math.round(bestScore * 100),
-    matchedLabel: bestLabel,
+    hasSolar: effectiveScore > 0.2 || bestScore > 0.15,
+    confidence: Math.round(effectiveScore * 100),
+    matchedLabel: bestLabel || (colorBoost > 0.1 ? '色彩パターン検出' : ''),
     topLabels: labels.slice(0, 5).map(l => l.display)
   };
 }
